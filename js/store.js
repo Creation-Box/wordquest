@@ -40,7 +40,10 @@ const createDefaults = () => ({
     voiceName: '',          // 指定的美式英語語音名稱；空字串＝自動
     onboarded: false,       // 是否看過新手導覽
     backupMilestone: 0,     // 已提醒過的單字數里程碑（20 的倍數）
-    cloudProvider: 'none'   // 雲端同步：none | gdrive | firebase
+    cloudProvider: 'none',  // 雲端同步：none | gdrive | firebase
+    gdriveClientId: '',     // Google OAuth 用戶端 ID（使用者自己建立）
+    firebaseConfig: '',     // Firebase 網頁應用程式的 firebaseConfig（文字）
+    cloudAutoSync: true     // 連線後，單字或群組有變動就自動上傳
   },
   groups: [{ groupId: 'grp_default', groupName: '我的單字', description: '預設群組', createdAt: nowISO() }],
   words: []
@@ -113,6 +116,9 @@ export function normalizeData(raw) {
   settings.voiceName = str(settings.voiceName, 200);
   settings.onboarded = Boolean(settings.onboarded);
   if (!CLOUD_PROVIDERS.includes(settings.cloudProvider)) settings.cloudProvider = base.settings.cloudProvider;
+  settings.gdriveClientId = str(settings.gdriveClientId, 200);
+  settings.firebaseConfig = str(settings.firebaseConfig, 2000);
+  settings.cloudAutoSync = Boolean(settings.cloudAutoSync);
 
   const groups = (Array.isArray(raw.groups) ? raw.groups : [])
     .filter((g) => g && g.groupId && g.groupName).map(buildGroup);
@@ -175,6 +181,9 @@ export const store = {
     if ('unsplashKey' in p) p.unsplashKey = str(p.unsplashKey, 100);
     if ('voiceName' in p) p.voiceName = str(p.voiceName, 200);
     if ('onboarded' in p) p.onboarded = Boolean(p.onboarded);
+    if ('gdriveClientId' in p) p.gdriveClientId = str(p.gdriveClientId, 200);
+    if ('firebaseConfig' in p) p.firebaseConfig = str(p.firebaseConfig, 2000);
+    if ('cloudAutoSync' in p) p.cloudAutoSync = Boolean(p.cloudAutoSync);
     if ('backupMilestone' in p) p.backupMilestone = Math.max(0, Math.floor(Number(p.backupMilestone)) || 0);
     commit((s) => Object.assign(s.settings, p));
   },
@@ -195,6 +204,17 @@ export const store = {
     const next = normalizeData(raw);
     next.settings.backupMilestone = milestoneOf(next.words.length); // 剛還原，不需要立刻提醒
     commit((s) => { s.settings = next.settings; s.groups = next.groups; s.words = next.words; });
+    return { groups: next.groups.length, words: next.words.length };
+  },
+
+  /** 只取代群組與單字，保留本機設定（雲端下載用；設定裡有 API Key 等，不跟著雲端走） */
+  restoreContent(raw) {
+    const next = normalizeData(raw);
+    commit((s) => {
+      s.groups = next.groups;
+      s.words = next.words;
+      s.settings.backupMilestone = milestoneOf(next.words.length);
+    });
     return { groups: next.groups.length, words: next.words.length };
   },
 

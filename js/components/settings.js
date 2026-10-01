@@ -1,4 +1,4 @@
-// 系統設定：外觀／檢視模式、語音、Unsplash Key、單字匯入匯出、完整備份、雲端同步（預留）、新手導覽
+// 系統設定：外觀／檢視模式、語音、Unsplash Key、單字匯入匯出、完整備份、雲端同步（Google Drive／Firebase）、新手導覽
 import { store, SPEECH_RATES, normalizeData } from '../store.js';
 import { speakWord, isSupported, listEnglishVoices, onVoicesChanged } from '../tts.js';
 import { esc, cls, confirmDialog, openDialog, toast } from '../ui.js';
@@ -62,29 +62,135 @@ const fmtTime = (ts) => new Date(ts).toLocaleString('zh-TW', { hour12: false });
 
 function cloudHtml() {
   const st = cloud.state;
-  const provider = store.state.settings.cloudProvider;
-  const online = st.status !== 'disconnected';
-  const label = online && PROVIDERS[provider] ? `（${PROVIDERS[provider].label}）` : '';
+  const s = store.state.settings;
+  const provider = s.cloudProvider;
+  const label = st.connected && PROVIDERS[provider] ? `（${PROVIDERS[provider].label}）` : '';
+  const resume = !st.connected && PROVIDERS[provider]
+    ? `<p class="text-xs text-slate-500 dark:text-slate-400">上次使用 ${PROVIDERS[provider].label}，重新開啟網頁後需要再按一次「連結」才會繼續同步。</p>` : '';
   return `
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1" role="status">
       <span class="cloud-lamp cloud-${st.status}" aria-hidden="true"></span>
       <span class="text-sm font-medium">${STATUS_LABELS[st.status]}${label}</span>
       ${st.lastSync ? `<span class="text-xs text-slate-500 dark:text-slate-400">上次同步 ${fmtTime(st.lastSync)}</span>` : ''}
-      ${st.error ? `<span class="text-xs text-red-600 dark:text-red-400">${esc(st.error)}</span>` : ''}
     </div>
+    ${st.error ? `<p class="text-xs text-red-600 dark:text-red-400">${esc(st.error)}</p>` : ''}
+    ${resume}
     <div class="grid grid-cols-2 gap-2">
       ${Object.entries(PROVIDERS).map(([id, p]) => `
-        <button type="button" data-action="cloud-connect" data-provider="${id}" class="${cls.btnGhost}">
+        <button type="button" data-action="cloud-connect" data-provider="${id}" ${st.status === 'connecting' ? 'disabled' : ''} class="${cls.btnGhost}">
           <i data-lucide="${p.icon}" class="size-4"></i>連結 ${p.label}
         </button>`).join('')}
     </div>
     <div class="flex flex-wrap gap-2">
-      <button type="button" data-action="cloud-sync" ${online ? '' : 'disabled'} class="${cls.btnGhost}">
+      <button type="button" data-action="cloud-sync" ${st.connected && st.status !== 'syncing' ? '' : 'disabled'} class="${cls.btnPrimary}">
         <i data-lucide="refresh-cw" class="size-4"></i>立即同步
       </button>
-      <button type="button" data-action="cloud-disconnect" ${online ? '' : 'disabled'} class="${cls.btnGhost}">中斷連線</button>
-    </div>`;
+      <button type="button" data-action="cloud-pull" ${st.connected && st.status !== 'syncing' ? '' : 'disabled'} class="${cls.btnGhost}">
+        <i data-lucide="cloud-download" class="size-4"></i>從雲端還原
+      </button>
+      <button type="button" data-action="cloud-disconnect" ${st.connected ? '' : 'disabled'} class="${cls.btnGhost}">中斷連線</button>
+    </div>
+    <label class="flex items-center gap-2 text-sm">
+      <input id="cloud-auto" type="checkbox" class="size-4 accent-teal-700" ${s.cloudAutoSync ? 'checked' : ''}>
+      單字或群組有變動時，自動上傳到雲端
+    </label>`;
 }
+
+/** 雲端服務的設定欄位與申請步驟（不會跟著狀態燈重畫，避免打字到一半被清掉） */
+function cloudConfigHtml() {
+  const s = store.state.settings;
+  const origin = location.origin;
+  const rules = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}`;
+  const step = 'list-decimal pl-5 grid gap-1 text-xs text-slate-600 dark:text-slate-300';
+  const box = 'rounded-xl border border-slate-200 dark:border-slate-800 p-3';
+  return `
+    <details class="${box}">
+      <summary class="cursor-pointer text-sm font-medium">Google Drive 設定</summary>
+      <div class="mt-3 grid gap-3">
+        <ol class="${step}">
+          <li>到 console.cloud.google.com 建立一個專案。</li>
+          <li>「API 和服務」→「程式庫」→ 搜尋並啟用 <b>Google Drive API</b>。</li>
+          <li>「OAuth 同意畫面」→ 使用者類型選「外部」，填 App 名稱和你的信箱；發布狀態維持「測試中」，在「測試使用者」加入你自己的 Gmail。</li>
+          <li>「憑證」→「建立憑證」→「OAuth 用戶端 ID」→ 應用程式類型選「網頁應用程式」，「已授權的 JavaScript 來源」填 <b>${esc(origin)}</b>（只填網域，不要加 /wordquest）。</li>
+          <li>把產生的「用戶端 ID」貼到下面。</li>
+        </ol>
+        <p class="text-xs text-slate-500 dark:text-slate-400">資料存在 App 專屬的隱藏資料夾，看不到也不會動到你其他的雲端硬碟檔案。</p>
+        <input id="gdrive-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="xxxxxxxx.apps.googleusercontent.com"
+          value="${esc(s.gdriveClientId)}" class="${cls.input}">
+        <button type="button" data-action="cloud-save-config" class="${cls.btnGhost} justify-self-start">儲存</button>
+      </div>
+    </details>
+
+    <details class="${box}">
+      <summary class="cursor-pointer text-sm font-medium">Firebase 設定</summary>
+      <div class="mt-3 grid gap-3">
+        <ol class="${step}">
+          <li>到 console.firebase.google.com 建立專案（Analytics 可以關掉）。</li>
+          <li>「專案設定」→「一般」→「您的應用程式」新增一個網頁應用程式，複製畫面上的 <b>firebaseConfig</b>。</li>
+          <li>「Authentication」→「登入方式」啟用 <b>Google</b>；「設定」→「授權網域」加入 <b>${esc(location.hostname)}</b>。</li>
+          <li>「Firestore Database」→ 建立資料庫（正式版模式即可）→「規則」貼上下面這段並發布。</li>
+          <li>把 firebaseConfig 整段貼到下面。</li>
+        </ol>
+        <pre class="overflow-x-auto rounded-lg bg-slate-100 dark:bg-slate-800 p-3 text-xs">${esc(rules)}</pre>
+        <textarea id="firebase-config" rows="6" spellcheck="false" placeholder="const firebaseConfig = {&#10;  apiKey: &quot;...&quot;,&#10;  projectId: &quot;...&quot;,&#10;  ...&#10;};"
+          class="${cls.input} font-mono text-xs">${esc(s.firebaseConfig)}</textarea>
+        <button type="button" data-action="cloud-save-config" class="${cls.btnGhost} justify-self-start">儲存</button>
+      </div>
+    </details>`;
+}
+
+const saveCloudConfig = () => {
+  const g = root.querySelector('#gdrive-client-id');
+  const f = root.querySelector('#firebase-config');
+  const patch = {};
+  if (g) patch.gdriveClientId = g.value;
+  if (f) patch.firebaseConfig = f.value;
+  store.setSettings(patch);
+};
+
+/** 本機和雲端內容不同時，問使用者要保留哪一份 */
+function askConflict(remote, local) {
+  const rg = Array.isArray(remote.groups) ? remote.groups.length : 0;
+  const rw = Array.isArray(remote.words) ? remote.words.length : 0;
+  return new Promise((resolve) => {
+    let picked = null;
+    const dlg = openDialog(`
+      <div class="grid gap-4">
+        <h2 class="text-lg font-bold">本機和雲端的內容不一樣</h2>
+        <div class="grid gap-1 text-sm">
+          <p><b>本機：</b>${local.groups.length} 個群組、${local.words.length} 個單字</p>
+          <p><b>雲端：</b>${rg} 個群組、${rw} 個單字${remote.exportedAt ? `（${esc(fmtTime(remote.exportedAt))} 上傳）` : ''}</p>
+        </div>
+        <p class="text-sm text-slate-600 dark:text-slate-300">選一份保留，另一份會被取代。不確定的話，先取消，匯出完整備份再回來。</p>
+        <div class="grid gap-2">
+          <button type="button" data-pick="remote" class="${cls.btnGhost}">用雲端取代本機</button>
+          <button type="button" data-pick="local" class="${cls.btnGhost}">用本機覆蓋雲端</button>
+          <button type="button" data-pick="" class="${cls.btnPrimary}">取消</button>
+        </div>
+      </div>`);
+    dlg.addEventListener('close', () => resolve(picked));
+    dlg.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-pick]');
+      if (!b) return;
+      picked = b.dataset.pick || null;
+      dlg.close();
+    });
+  });
+}
+
+const CLOUD_RESULT = {
+  pushed: '本機資料已上傳到雲端',
+  pulled: '已下載雲端資料到本機',
+  same: '本機和雲端內容一致',
+  cancelled: '已取消'
+};
 
 function refreshCloud() {
   const box = root?.querySelector('#cloud-box');
@@ -208,7 +314,8 @@ export function render(el) {
 
   const cloudBody = `
     <div id="cloud-box" class="grid gap-3">${cloudHtml()}</div>
-    <p class="text-xs text-slate-500 dark:text-slate-400">這是預留介面，目前還沒有接上實際的雲端服務。資料請先用上面的「完整備份」保存。</p>`;
+    ${cloudConfigHtml()}
+    <p class="text-xs text-slate-500 dark:text-slate-400">雲端只保存群組與單字，不含設定與 Unsplash Key。兩個裝置都改過內容時，同步會問你保留哪一份。</p>`;
 
   const help = `
     <button type="button" data-action="tour" class="${cls.btnGhost} justify-self-start">
@@ -228,7 +335,7 @@ export function render(el) {
       ${section('圖片搜尋', '填入 Unsplash Access Key，新增單字時就能搜尋 Unsplash 照片；沒填則使用免 Key 圖庫。', unsplash)}
       ${section('單字匯入與匯出', '以群組為單位，和別人分享或整理單字。', wordIO)}
       ${section('完整備份與還原', '一次保存或還原全部的設定、群組與單字。', backup)}
-      ${section('雲端同步', 'Google Drive／Firebase（預留）', cloudBody)}
+      ${section('雲端同步', '用 Google Drive 或 Firebase，讓多台裝置共用同一份單字。', cloudBody)}
       ${section('新手導覽', '', help)}
       ${section('資料', '', danger)}
     </div>`;
@@ -278,21 +385,49 @@ async function onClick(e) {
       toast('已匯出 wordquest_backup.json');
       break;
 
+    case 'cloud-save-config':
+      saveCloudConfig();
+      toast('已儲存雲端設定');
+      break;
+
     case 'cloud-connect': {
       const p = PROVIDERS[d.provider];
+      saveCloudConfig();
+      const cfg = store.state.settings;
+      if (d.provider === 'gdrive' ? !cfg.gdriveClientId.trim() : !cfg.firebaseConfig.trim()) {
+        infoDialog('還沒有設定', `請先照「${p.label} 設定」裡的步驟申請，並把${d.provider === 'gdrive' ? '用戶端 ID' : 'firebaseConfig'}貼上。`);
+        break;
+      }
       try {
-        await cloud.connect(d.provider);
-        toast(`已連結 ${p.label}`);
+        const action = await cloud.connect(d.provider, askConflict);
+        toast(action === 'cancelled' ? CLOUD_RESULT.cancelled : `已連結 ${p.label}：${CLOUD_RESULT[action]}`);
+        if (action === 'pulled') again();
       } catch (err) {
-        if (err.message === 'NOT_IMPLEMENTED') {
-          infoDialog('雲端同步尚未啟用', `${p.label} 的介面已預留，但還沒有接上實際的服務。目前請用「匯出完整備份」保存資料。`);
-        } else infoDialog('連結失敗', err.message);
+        infoDialog('連結失敗', err.message);
       }
       break;
     }
     case 'cloud-sync':
-      try { await cloud.syncNow(); toast('已同步'); } catch (err) { infoDialog('同步失敗', err.message); }
+      try {
+        const action = await cloud.syncNow(askConflict);
+        toast(CLOUD_RESULT[action]);
+        if (action === 'pulled') again();
+      } catch (err) { infoDialog('同步失敗', err.message); }
       break;
+    case 'cloud-pull': {
+      const ok = await confirmDialog({
+        title: '用雲端資料取代本機？',
+        message: '本機的群組與單字會被雲端上的版本取代，無法復原。建議先匯出完整備份。',
+        confirmText: '取代'
+      });
+      if (!ok) break;
+      try {
+        const n = await cloud.pullNow();
+        toast(`已從雲端還原 ${n} 個單字`);
+        again();
+      } catch (err) { infoDialog('還原失敗', err.message); }
+      break;
+    }
     case 'cloud-disconnect':
       await cloud.disconnect();
       again();
@@ -325,6 +460,9 @@ async function onChange(e) {
     case 'voice-select':
       store.setSettings({ voiceName: t.value });
       speakWord({ word: 'Hello, welcome to WordQuest' }, { bilingual: false });
+      break;
+    case 'cloud-auto':
+      store.setSettings({ cloudAutoSync: t.checked });
       break;
     case 'bilingual':
       store.setSettings({ bilingualSpeech: t.checked });

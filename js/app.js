@@ -2,6 +2,8 @@
 import { store } from './store.js';
 import { initSpeakButtons } from './tts.js';
 import { initBackupReminder } from './backup.js';
+import { cloud } from './cloud.js';
+import './cloud-adapters.js'; // 註冊 Google Drive／Firebase adapter
 import * as library from './components/group.js';
 import * as study from './components/flashcard.js';
 import * as quiz from './components/modes.js';
@@ -154,4 +156,5 @@ applyViewMode();
 syncHeader();
 renderRoute();
 initBackupReminder();
+cloud.resume(); // 之前連過 Firebase 的話，自動恢復連線與同步（Google Drive 需要按一次「連結」）
 setTimeout(maybeShowOnboarding, 500); // 第一次使用時跳出新手導覽

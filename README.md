@@ -15,7 +15,7 @@ ES Modules 不能用 `file://` 直接開，請在專案資料夾啟動本機伺�
 - 群組／單字庫：群組與單字的新增、編輯、刪除、搜尋、★ 收藏、圖片（Unsplash 或貼網址）
 - 學習模式：翻卡、左右滑動、雙語發音
 - 測驗模式：連連看、聽音辨識、限時速刷、單字填空、默寫練習（翻卡導向學習模式）
-- 系統設定：主題、檢視模式、語音與語速、Unsplash Key、群組 JSON／CSV 匯入匯出、完整備份與還原、每 20 個單字的備份提醒、雲端同步介面（預留）、新手導覽
+- 系統設定：主題、檢視模式、語音與語速、Unsplash Key、群組 JSON／CSV 匯入匯出、完整備份與還原、每 20 個單字的備份提醒、雲端同步（Google Drive／Firebase）、新手導覽
 
 ## 檔案結構
     index.html
@@ -26,9 +26,21 @@ ES Modules 不能用 `file://` 直接開，請在專案資料夾啟動本機伺�
     js/tts.js            Web Speech 雙語發音
     js/images.js         圖片搜尋
     js/backup.js         匯入匯出、備份與提醒
-    js/cloud.js          雲端同步 adapter 介面（尚未接實際服務）
+    js/cloud.js          雲端同步引擎（狀態、衝突判斷、自動上傳）
+    js/cloud-adapters.js Google Drive／Firebase 連線
     js/components/       group、flashcard、modes、settings、onboarding
+
+## 雲端同步
+兩種擇一，都需要自己申請（免費），步驟在「系統設定 → 雲端同步」展開對應的設定說明：
+- **Google Drive**：建立 OAuth 用戶端 ID，資料放在 App 專屬隱藏資料夾，不碰其他檔案。
+- **Firebase**：建立專案、啟用 Google 登入與 Firestore，貼上 firebaseConfig 與安全規則。
+
+重點行為：
+- 雲端只存群組與單字，不存設定與 Unsplash Key。
+- 連線後單字有變動會在 3 秒後自動上傳（可關閉）。
+- 兩邊內容不同時（例如另一台裝置改過），自動同步會暫停，按「立即同步」選擇保留本機或雲端。
+- Firebase 重新開啟網頁會自動恢復連線；Google Drive 需要再按一次「連結」。
+- 授權網域／來源要填 GitHub Pages 的網域，例如 `https://creation-box.github.io`。
 
 ## 備註
 - 完整備份檔含 Unsplash Key，分享前請留意。
-- 雲端同步要接 Google Drive／Firebase，請照 `js/cloud.js` 開頭的說明註冊 adapter。
