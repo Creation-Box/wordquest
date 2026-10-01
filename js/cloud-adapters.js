@@ -1,4 +1,4 @@
-// 雲端同步 adapter：Google Drive（App Data 隱藏資料夾）與 Firebase（Auth + Firestore）
+// 雲端同步 adapter：GitHub Gist（最簡單）、Google Drive（App Data 隱藏資料夾）、Firebase（Auth + Firestore）
 // 兩者都需要使用者自己建立專案並把 ID／設定貼到「系統設定 → 雲端同步」，步驟見設定頁的說明。
 import { store } from './store.js';
 import { cloud } from './cloud.js';
@@ -178,5 +178,78 @@ const firebase = {
   })
 };
 
+/* =====================================================================
+   GitHub Gist：用 classic token（只勾 gist）在自己的帳號下建立一個 secret gist。
+   token 存在本機設定裡，所以重新開網頁會自動恢復連線。
+   ===================================================================== */
+const GH = 'https://api.github.com';
+const GIST_FILE = 'wordquest_backup.json';
+const GIST_DESC = 'WordQuest 單字備份（自動同步，請勿手動編輯）';
+let gistId = null;
+
+/** 呼叫 GitHub API；404 交給呼叫端處理，其他錯誤直接丟出有意義的訊息 */
+export async function ghApi(path, { method = 'GET', body, token = store.state.settings.githubToken.trim() } = {}) {
+  const headers = { Accept: 'application/vnd.github+json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (body) headers['Content-Type'] = 'application/json';
+  let res;
+  try { res = await fetch(`${GH}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined }); }
+  catch (e) { throw new Error('無法連到 GitHub，請檢查網路連線。'); }
+  if (res.status === 401) throw new Error('GitHub token 無效或已過期，請重新產生並貼上。');
+  if (res.status === 403 || res.status === 429) throw new Error('GitHub 拒絕存取：token 可能沒有勾選 gist 權限，或短時間內請求太多，請稍後再試。');
+  if (!res.ok && res.status !== 404) throw new Error(`GitHub 回應錯誤 ${res.status}`);
+  return res;
+}
+
+const gistText = async (file) => (file.truncated ? (await fetch(file.raw_url)).text() : file.content);
+
+async function findGist() {
+  if (gistId) return gistId;
+  for (let page = 1; page <= 5; page++) {
+    const list = await (await ghApi(`/gists?per_page=100&page=${page}`)).json();
+    const hit = list.find((g) => g.files && g.files[GIST_FILE]);
+    if (hit) return (gistId = hit.id);
+    if (list.length < 100) break;
+  }
+  return null;
+}
+
+const gist = {
+  async connect() {
+    if (!store.state.settings.githubToken.trim()) throw new Error('請先在設定頁貼上 GitHub token。');
+    const res = await ghApi('/user');
+    const scopes = res.headers.get('x-oauth-scopes');
+    if (scopes !== null && !scopes.split(',').map((x) => x.trim()).includes('gist')) {
+      throw new Error('這個 token 沒有勾選 gist 權限，請重新產生（只勾 gist）。');
+    }
+  },
+  /** token 在本機，重新開網頁不用再登入 */
+  async resume() {
+    if (!store.state.settings.githubToken.trim()) return false;
+    try { await ghApi('/user'); return true; } catch (e) { return false; }
+  },
+  async disconnect() { gistId = null; },
+  async pull() {
+    const id = await findGist();
+    if (!id) return null;
+    const res = await ghApi(`/gists/${id}`);
+    if (res.status === 404) { gistId = null; return null; }
+    const file = (await res.json()).files?.[GIST_FILE];
+    return file ? JSON.parse(await gistText(file)) : null;
+  },
+  async push(data) {
+    const files = { [GIST_FILE]: { content: JSON.stringify(data) } };
+    const id = await findGist();
+    if (id) {
+      const res = await ghApi(`/gists/${id}`, { method: 'PATCH', body: { files } });
+      if (res.status !== 404) return;
+      gistId = null; // 被刪掉了，下面重新建立
+    }
+    const res = await ghApi('/gists', { method: 'POST', body: { description: GIST_DESC, public: false, files } });
+    gistId = (await res.json()).id;
+  }
+};
+
+cloud.registerAdapter('gist', gist);
 cloud.registerAdapter('gdrive', gdrive);
 cloud.registerAdapter('firebase', firebase);
