@@ -1,6 +1,6 @@
 // 雲端同步引擎：狀態管理、衝突判斷、自動上傳。實際的 Google Drive／Firebase 連線在 cloud-adapters.js。
 //
-// adapter 介面（cloud-adapters.js 已實作兩個）：
+// adapter 介面（cloud-adapters.js 已實作 GitHub Gist、Google Drive、Firebase）：
 //   connect()      登入／取得授權
 //   disconnect()   登出
 //   push(data)     上傳 data（群組＋單字）
@@ -14,6 +14,7 @@
 import { store, normalizeData } from './store.js';
 
 export const PROVIDERS = {
+  gist: { label: 'GitHub Gist', icon: 'github' },
   gdrive: { label: 'Google Drive', icon: 'hard-drive' },
   firebase: { label: 'Firebase', icon: 'flame' }
 };
