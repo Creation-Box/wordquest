@@ -193,7 +193,7 @@ export async function ghApi(path, { method = 'GET', body, token = store.state.se
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body) headers['Content-Type'] = 'application/json';
   let res;
-  try { res = await fetch(`${GH}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined }); }
+  try { res = await fetch(`${GH}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' }); }
   catch (e) { throw new Error('無法連到 GitHub，請檢查網路連線。'); }
   if (res.status === 401) throw new Error('GitHub token 無效或已過期，請重新產生並貼上。');
   if (res.status === 403 || res.status === 429) throw new Error('GitHub 拒絕存取：token 可能沒有勾選 gist 權限，或短時間內請求太多，請稍後再試。');
@@ -201,7 +201,7 @@ export async function ghApi(path, { method = 'GET', body, token = store.state.se
   return res;
 }
 
-const gistText = async (file) => (file.truncated ? (await fetch(file.raw_url)).text() : file.content);
+const gistText = async (file) => (file.truncated ? (await fetch(file.raw_url, { cache: 'no-store' })).text() : file.content);
 
 async function findGist() {
   if (gistId) return gistId;

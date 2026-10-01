@@ -66,7 +66,7 @@ function cloudHtml() {
   const provider = s.cloudProvider;
   const label = st.connected && PROVIDERS[provider] ? `（${PROVIDERS[provider].label}）` : '';
   const resume = !st.connected && PROVIDERS[provider]
-    ? `<p class="text-xs text-slate-500 dark:text-slate-400">上次使用 ${PROVIDERS[provider].label}，重新開啟網頁後需要再按一次「連結」才會繼續同步。</p>` : '';
+    ? `<p class="text-xs text-slate-500 dark:text-slate-400">上次使用 ${PROVIDERS[provider].label}，${provider === 'gdrive' ? '重新開啟網頁後需要再按一次「連結」才會繼續同步。' : '尚未恢復連線，請按「連結」重試（可能是 token 失效或網路問題）。'}</p>` : '';
   return `
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1" role="status">
       <span class="cloud-lamp cloud-${st.status}" aria-hidden="true"></span>
@@ -112,6 +112,21 @@ service cloud.firestore {
   const box = 'rounded-xl border border-slate-200 dark:border-slate-800 p-3';
   return `
     <details class="${box}">
+      <summary class="cursor-pointer text-sm font-medium">GitHub Gist 設定</summary>
+      <div class="mt-3 grid gap-3">
+        <ol class="${step}">
+          <li>登入 GitHub →「Settings」→「Developer settings」→「Personal access tokens」→「Tokens (classic)」。</li>
+          <li>「Generate new token (classic)」，Note 隨意填，Expiration 自選，<b>只勾 gist</b>。</li>
+          <li>產生後立刻複製 token（<b>ghp_</b> 開頭），貼到下面並按儲存。fine-grained token 不支援 Gist，請用 classic。</li>
+        </ol>
+        <p class="text-xs text-slate-500 dark:text-slate-400">資料存在你帳號下的一個 secret gist（wordquest_backup.json）。token 只存在這台裝置的瀏覽器，不會進備份檔，也不要貼到 GitHub 上的程式碼裡。</p>
+        <input id="github-token" type="password" autocomplete="off" spellcheck="false" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+          value="${esc(s.githubToken)}" class="${cls.input}">
+        <button type="button" data-action="cloud-save-config" class="${cls.btnGhost} justify-self-start">儲存</button>
+      </div>
+    </details>
+
+    <details class="${box}">
       <summary class="cursor-pointer text-sm font-medium">Google Drive 設定</summary>
       <div class="mt-3 grid gap-3">
         <ol class="${step}">
@@ -149,9 +164,11 @@ service cloud.firestore {
 const saveCloudConfig = () => {
   const g = root.querySelector('#gdrive-client-id');
   const f = root.querySelector('#firebase-config');
+  const t = root.querySelector('#github-token');
   const patch = {};
   if (g) patch.gdriveClientId = g.value;
   if (f) patch.firebaseConfig = f.value;
+  if (t) patch.githubToken = t.value.trim();
   store.setSettings(patch);
 };
 
@@ -335,7 +352,7 @@ export function render(el) {
       ${section('圖片搜尋', '填入 Unsplash Access Key，新增單字時就能搜尋 Unsplash 照片；沒填則使用免 Key 圖庫。', unsplash)}
       ${section('單字匯入與匯出', '以群組為單位，和別人分享或整理單字。', wordIO)}
       ${section('完整備份與還原', '一次保存或還原全部的設定、群組與單字。', backup)}
-      ${section('雲端同步', '用 Google Drive 或 Firebase，讓多台裝置共用同一份單字。', cloudBody)}
+      ${section('雲端同步', '用 GitHub Gist、Google Drive 或 Firebase，讓多台裝置共用同一份單字。', cloudBody)}
       ${section('新手導覽', '', help)}
       ${section('資料', '', danger)}
     </div>`;
@@ -394,8 +411,14 @@ async function onClick(e) {
       const p = PROVIDERS[d.provider];
       saveCloudConfig();
       const cfg = store.state.settings;
-      if (d.provider === 'gdrive' ? !cfg.gdriveClientId.trim() : !cfg.firebaseConfig.trim()) {
-        infoDialog('還沒有設定', `請先照「${p.label} 設定」裡的步驟申請，並把${d.provider === 'gdrive' ? '用戶端 ID' : 'firebaseConfig'}貼上。`);
+      const MISSING = {
+        gist: [!cfg.githubToken.trim(), 'GitHub token'],
+        gdrive: [!cfg.gdriveClientId.trim(), '用戶端 ID'],
+        firebase: [!cfg.firebaseConfig.trim(), 'firebaseConfig']
+      };
+      const [missing, what] = MISSING[d.provider];
+      if (missing) {
+        infoDialog('還沒有設定', `請先照「${p.label} 設定」裡的步驟申請，並把${what}貼上。`);
         break;
       }
       try {

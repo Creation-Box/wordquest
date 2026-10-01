@@ -156,5 +156,5 @@ applyViewMode();
 syncHeader();
 renderRoute();
 initBackupReminder();
-cloud.resume(); // 之前連過 Firebase 的話，自動恢復連線與同步（Google Drive 需要按一次「連結」）
+cloud.resume(); // 之前連過 Gist／Firebase 的話，自動恢復連線與同步（Google Drive 需要按一次「連結」）
 setTimeout(maybeShowOnboarding, 500); // 第一次使用時跳出新手導覽
