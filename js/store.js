@@ -11,7 +11,7 @@ export const POS_LABELS = {
 };
 export const FAMILIARITY_LABELS = { New: '新單字', Learning: '學習中', Mastered: '已熟練' };
 export const VIEW_MODES = ['auto', 'mobile', 'desktop'];
-export const CLOUD_PROVIDERS = ['none', 'gdrive', 'firebase'];
+export const CLOUD_PROVIDERS = ['none', 'gist', 'gdrive', 'firebase'];
 
 const POS = Object.keys(POS_LABELS);
 const FAMILIARITY = Object.keys(FAMILIARITY_LABELS);
@@ -43,7 +43,8 @@ const createDefaults = () => ({
     cloudProvider: 'none',  // 雲端同步：none | gdrive | firebase
     gdriveClientId: '',     // Google OAuth 用戶端 ID（使用者自己建立）
     firebaseConfig: '',     // Firebase 網頁應用程式的 firebaseConfig（文字）
-    cloudAutoSync: true     // 連線後，單字或群組有變動就自動上傳
+    cloudAutoSync: true,    // 連線後，單字或群組有變動就自動上傳
+    githubToken: ''         // GitHub classic token（只勾 gist）；只存在本機，不會進備份檔
   },
   groups: [{ groupId: 'grp_default', groupName: '我的單字', description: '預設群組', createdAt: nowISO() }],
   words: []
@@ -119,6 +120,7 @@ export function normalizeData(raw) {
   settings.gdriveClientId = str(settings.gdriveClientId, 200);
   settings.firebaseConfig = str(settings.firebaseConfig, 2000);
   settings.cloudAutoSync = Boolean(settings.cloudAutoSync);
+  settings.githubToken = str(settings.githubToken, 200);
 
   const groups = (Array.isArray(raw.groups) ? raw.groups : [])
     .filter((g) => g && g.groupId && g.groupName).map(buildGroup);
@@ -184,6 +186,7 @@ export const store = {
     if ('gdriveClientId' in p) p.gdriveClientId = str(p.gdriveClientId, 200);
     if ('firebaseConfig' in p) p.firebaseConfig = str(p.firebaseConfig, 2000);
     if ('cloudAutoSync' in p) p.cloudAutoSync = Boolean(p.cloudAutoSync);
+    if ('githubToken' in p) p.githubToken = str(p.githubToken, 200);
     if ('backupMilestone' in p) p.backupMilestone = Math.max(0, Math.floor(Number(p.backupMilestone)) || 0);
     commit((s) => Object.assign(s.settings, p));
   },
@@ -196,12 +199,14 @@ export const store = {
   exportData() {
     return JSON.parse(JSON.stringify({
       app: 'wordquest', type: 'backup', version: DATA_VERSION, exportedAt: nowISO(),
-      settings: state.settings, groups: state.groups, words: state.words
+      settings: { ...state.settings, githubToken: '' }, // token 不放進備份檔，避免外洩
+      groups: state.groups, words: state.words
     }));
   },
   /** 用備份內容取代目前所有資料；回傳還原後的筆數 */
   restore(raw) {
     const next = normalizeData(raw);
+    next.settings.githubToken = state.settings.githubToken; // 備份檔不含 token，還原時保留本機的
     next.settings.backupMilestone = milestoneOf(next.words.length); // 剛還原，不需要立刻提醒
     commit((s) => { s.settings = next.settings; s.groups = next.groups; s.words = next.words; });
     return { groups: next.groups.length, words: next.words.length };
