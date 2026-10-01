@@ -1,0 +1,101 @@
+/* WordQuest — 自訂樣式（Tailwind CDN 不處理 @apply，這裡使用純 CSS） */
+
+:focus-visible { outline: 2px solid #14b8a6; outline-offset: 2px; }
+
+/* 桌面側邊欄連結 */
+.nav-link {
+  display: flex; align-items: center; gap: .75rem;
+  border-radius: .75rem; color: #475569;
+  transition: background-color .15s, color .15s;
+}
+.dark .nav-link { color: #94a3b8; }
+.nav-link:hover { background: rgb(15 118 110 / .08); }
+.dark .nav-link:hover { background: rgb(45 212 191 / .1); }
+.nav-link[aria-current="page"] { background: #0f766e; color: #fff; }
+.dark .nav-link[aria-current="page"] { background: #2dd4bf; color: #042f2e; }
+
+/* 手機底欄連結 */
+.tab-link {
+  display: flex; flex-direction: column; align-items: center; gap: .125rem;
+  padding: .5rem 0 .625rem; color: #64748b;
+}
+.dark .tab-link { color: #94a3b8; }
+.tab-icon {
+  display: grid; place-items: center; width: 3.5rem; height: 1.75rem;
+  border-radius: 999px; transition: background-color .2s;
+}
+.tab-link[aria-current="page"] { color: #0f766e; font-weight: 700; }
+.dark .tab-link[aria-current="page"] { color: #5eead4; }
+.tab-link[aria-current="page"] .tab-icon { background: rgb(15 118 110 / .14); }
+.dark .tab-link[aria-current="page"] .tab-icon { background: rgb(45 212 191 / .16); }
+
+/* 翻卡 */
+.flip-scene { perspective: 1200px; }
+.flip-card {
+  position: relative; transform-style: preserve-3d;
+  transition: transform .5s cubic-bezier(.2, .8, .2, 1);
+}
+.flip-card.is-flipped { transform: rotateY(180deg); }
+.flip-face {
+  position: absolute; inset: 0;
+  -webkit-backface-visibility: hidden; backface-visibility: hidden;
+}
+.flip-back { transform: rotateY(180deg); }
+
+/* 手勢區：允許垂直捲動，水平滑動交給 JS（Phase 後續使用） */
+.swipe-area { touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+
+/* 切換頁面時的淡入（回應使用者操作） */
+.view-enter { animation: view-in .18s ease-out; }
+@keyframes view-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .flip-card, .nav-link, .tab-icon { transition: none; }
+  .view-enter { animation: none; }
+}
+
+/* ===== Phase 2 ===== */
+
+/* Header 安全區域 */
+.app-header { padding-top: calc(.5rem + env(safe-area-inset-top, 0px)); }
+@media (min-width: 768px) { .app-header { padding-top: .75rem; } }
+.bottom-bar { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* 搜尋框：隱藏瀏覽器內建的清除鈕（改用自訂按鈕） */
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; display: none; }
+
+/* ★ 收藏專區啟用狀態 */
+.header-btn.star-active { color: #f59e0b; }
+.header-btn.star-active svg { fill: currentColor; }
+
+/* 瀑布流：CSS columns */
+.masonry > * { break-inside: avoid; margin-bottom: 1rem; }
+
+/* 對話框（新增／編輯／確認） */
+.wq-dialog {
+  width: min(92vw, 34rem); max-height: 90dvh; margin: auto; padding: 0;
+  border: 1px solid #e2e8f0; border-radius: 1.25rem;
+  background: #fff; color: #1e293b;
+  box-shadow: 0 20px 50px -12px rgb(2 6 23 / .35);
+}
+.dark .wq-dialog { background: #0f172a; border-color: #1e293b; color: #f1f5f9; }
+.wq-dialog::backdrop { background: rgb(2 6 23 / .55); }
+
+/* ===== Phase 3 ===== */
+
+/* 通用「已啟用」星號（按鈕加上 .star-active 即變色並填滿） */
+.star-active { color: #f59e0b; }
+.star-active svg { fill: currentColor; }
+
+/* 切換卡片時略過翻轉動畫 */
+.flip-card.no-anim { transition: none; }
+
+/* 卡片內的圖片不可被拖曳（避免干擾滑動手勢） */
+.swipe-area img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
+
+/* 播放中的 🔊 按鈕 */
+.is-speaking { color: #0d9488; background: rgb(13 148 136 / .14); animation: speaking 1s ease-in-out infinite; }
+.dark .is-speaking { color: #5eead4; background: rgb(45 212 191 / .16); }
+@keyframes speaking { 50% { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .is-speaking { animation: none; } }
