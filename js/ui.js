@@ -7,7 +7,7 @@ export const cls = {
   btnPrimary: 'wq-primary inline-flex items-center justify-center gap-2 rounded-xl bg-teal-700 hover:bg-teal-800 dark:bg-teal-400 dark:hover:bg-teal-300 text-white dark:text-teal-950 px-4 py-2.5 text-sm font-medium',
   btnGhost: 'inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2.5 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50',
   btnDanger: 'inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 text-sm font-medium',
-  iconBtn: 'grid place-items-center size-9 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800',
+  iconBtn: 'wq-icon grid place-items-center size-9 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800',
   input: 'wq-input w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-normal outline-none focus:border-teal-600 dark:focus:border-teal-400'
 };
 

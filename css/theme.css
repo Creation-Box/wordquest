@@ -43,15 +43,37 @@ html:not(.dark) .wq-dialog { border-color: #d5ece8; box-shadow: 0 24px 60px -16p
 
 /* ---------- 深色：背景維持深黑，但卡片、側欄、輸入框一層一層分開 ---------- */
 html.dark body { background: #0b1220; }
-html.dark #app aside { background: #111a2d; border-color: #2a3a5a; }
-html.dark .app-header { background: rgb(17 26 45 / .92); border-color: #2a3a5a; }
+html.dark #app aside { background: #111a2d; border-color: #435781; }
+html.dark .app-header { background: rgb(17 26 45 / .92); border-color: #435781; }
 html.dark .wq-card {
-  background: #18233b; border-color: #34476b;
+  background: #18233b; border-color: #4a5f8a;
   box-shadow: 0 1px 0 rgb(255 255 255 / .05) inset, 0 8px 24px -12px rgb(0 0 0 / .65);
   transition: border-color .15s;
 }
 html.dark article.wq-card:hover, html.dark a.wq-card:hover, html.dark button.wq-card:hover { border-color: #2dd4bf; }
-html.dark .wq-input { background: #0f1a2e; border-color: #41567f; }
+html.dark .wq-input { background: #0f1a2e; border-color: #5b7099; }
 html.dark .wq-input:focus { border-color: #2dd4bf; box-shadow: 0 0 0 3px rgb(45 212 191 / .2); }
-html.dark .wq-dialog { background: #18233b; border-color: #3b4d73; }
+html.dark .wq-dialog { background: #18233b; border-color: #5b7099; }
 html.dark .tab-link { border-top: 1px solid transparent; }
+
+/* ---------- 深色：框線與按鈕外框加強辨識度 ---------- */
+/* Tailwind 裡「dark:border-slate-700／800」的元件（按鈕、選項、設定頁的選擇鈕、分隔線、折疊區塊）一律提亮 */
+html.dark .dark\:border-slate-700 { border-color: #5b7099; }
+html.dark .dark\:border-slate-800 { border-color: #435781; }
+/* 有框的按鈕與選項加一層淡底色，和卡片底色分開（hover 底色由 Tailwind 的 hover 規則處理） */
+html.dark button.dark\:border-slate-700,
+html.dark label.file-btn { background-color: #1d2a45; }
+html.dark button.dark\:border-slate-700:disabled { background-color: transparent; }
+/* 圖示按鈕（★、發音、編輯、刪除）和標頭按鈕：深色時加細框與底色 */
+html.dark .wq-icon, html.dark .header-btn { border: 1px solid #435781; background: #1d2a45; }
+html.dark .wq-icon:hover, html.dark .header-btn:hover { border-color: #5b7099; background: #26365a; }
+/* 搜尋框 */
+html.dark #search-input { border-color: #435781; }
+html.dark #search-input:focus { border-color: #2dd4bf; }
+/* 底部導覽、對話框背景遮罩 */
+html.dark .bottom-bar { background: rgb(17 26 45 / .96); border-color: #435781; }
+html.dark .wq-dialog::backdrop { background: rgb(0 0 0 / .7); }
+html.dark .wq-dialog { box-shadow: 0 0 0 1px rgb(255 255 255 / .06), 0 24px 60px -16px rgb(0 0 0 / .8); }
+/* 新手導覽的小卡片 */
+html.dark .ob-folder, html.dark .ob-front, html.dark .ob-mode { border-color: #5b7099; }
+html.dark .ob-chip { border-color: #5b7099; }

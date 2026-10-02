@@ -23,8 +23,8 @@ const THEMES = [
 ];
 const VIEWS = [
   { id: 'auto', label: '自動', icon: 'monitor-smartphone' },
-  { id: 'mobile', label: '手機 App', icon: 'smartphone' },
-  { id: 'desktop', label: '電腦 Dashboard', icon: 'monitor' }
+  { id: 'mobile', label: '手機', icon: 'smartphone' },
+  { id: 'desktop', label: '電腦', icon: 'monitor' }
 ];
 
 const LANGS = [
@@ -274,7 +274,7 @@ export function render(el) {
           </button>`).join('')}
       </div>
       <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
-        手機 App＝單欄加底部導覽列；電腦 Dashboard＝左側選單。手機上選「電腦」會改用桌面版寬度顯示，字會變小，可以用手指縮放。
+        手機＝單欄加底部導覽列；電腦＝左側選單。手機上選「電腦」會改用桌面版寬度顯示，字會變小，可以用手指縮放。
       </p>
     </div>`;
 

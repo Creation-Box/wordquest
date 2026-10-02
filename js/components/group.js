@@ -58,9 +58,6 @@ function emptyState(icon, title, text, actionHtml = '') {
     </div>`;
 }
 
-const importBtnHtml = (groupId) =>
-  `<button type="button" data-action="import-words" data-group="${esc(groupId)}" class="${cls.btnGhost}"><i data-lucide="file-up" class="size-4"></i>匯入單字檔</button>`;
-
 const grid = (items) =>
   `<div class="masonry columns-1 sm:columns-2 xl:columns-3 gap-4">${items.join('')}</div>`;
 
@@ -72,8 +69,7 @@ function renderGroups() {
     ? `<button type="button" data-action="add-word" data-group="${esc(store.getGroups()[0].groupId)}" class="${cls.btnGhost}"><i data-lucide="book-plus" class="size-4"></i>新增單字</button>`
     : '';
 
-  const importBtn = groups.length ? importBtnHtml(store.getGroups()[0].groupId) : '';
-  root.innerHTML = heading('群組／單字庫', importBtn + addWordBtn + addGroupBtn) + (groups.length
+  root.innerHTML = heading('群組／單字庫', addWordBtn + addGroupBtn) + (groups.length
     ? grid(groups.map(groupCard))
     : emptyState('layers', '還沒有群組', '建立第一個群組，再把單字加進去。', addGroupBtn));
 }
@@ -103,7 +99,7 @@ function renderGroupDetail(g) {
     <a href="#/library" class="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 mb-3">
       <i data-lucide="chevron-left" class="size-4"></i>全部群組
     </a>`
-    + heading(esc(g.groupName), importBtnHtml(g.groupId) + (words.length ? addBtn : ''), g.description)
+    + heading(esc(g.groupName), words.length ? addBtn : '', g.description)
     + (words.length
       ? grid(words.map((w) => wordCard(w)))
       : emptyState('book-plus', '這個群組還沒有單字', '新增第一個單字開始收集。', addBtn));
@@ -199,6 +195,7 @@ async function onClick(e) {
     }
     case 'add-word': { // 預設帶入目前群組，表單內可改選
       const data = await wordForm(null, btn.dataset.group || param);
+      if (data?.importFile) { await runImport(data.groupId); break; } // 在「新增單字」視窗按了「匯入單字檔」
       if (data) {
         store.addWord(data.groupId, data);
         toast(`已新增到「${store.getGroup(data.groupId).groupName}」`);
@@ -216,18 +213,6 @@ async function onClick(e) {
       if (await confirmDialog({ title: `刪除「${w.word}」？`, message: '此動作無法復原。' })) {
         store.deleteWord(id); toast('已刪除單字'); rerender();
       }
-      break;
-    }
-    case 'import-words': { // 選群組＋選檔案；同群組已有的同名單字會略過
-      const d = await importForm(btn.dataset.group || param);
-      if (!d) break;
-      try {
-        const { words, invalid } = parseWordFile(await d.file.text(), d.file.name);
-        if (!words.length) { toast(invalid ? `有 ${invalid} 列缺少單字或中文翻譯` : '檔案裡沒有資料'); break; }
-        const { added, duplicates } = store.importWords(d.groupId, words);
-        toast(`已匯入 ${added} 個單字${duplicates ? `，略過 ${duplicates} 個重複` : ''}`);
-        rerender();
-      } catch (err) { toast(err.message); }
       break;
     }
     case 'toggle-star':
@@ -261,6 +246,7 @@ function groupForm(g = null) {
 
 /** w 有值＝編輯；否則是新增，defaultGroupId 為預設所屬群組 */
 function wordForm(w = null, defaultGroupId = null) {
+  let pending = null; // 按「匯入單字檔」時，改回傳 { importFile: true, groupId }
   const groups = store.getGroups();
   const curGroup = w?.groupId || defaultGroupId || groups[0]?.groupId;
   const options = (map, cur, blank) =>
@@ -271,7 +257,11 @@ function wordForm(w = null, defaultGroupId = null) {
 
   return formDialog(`
     <form class="grid gap-4 max-h-[75dvh] overflow-y-auto -mx-1 px-1" novalidate>
-      <h2 class="text-lg font-bold">${w ? '編輯單字' : '新增單字'}</h2>
+      ${w ? '<h2 class="text-lg font-bold">編輯單字</h2>'
+        : `<div class="flex flex-wrap items-center justify-between gap-2">
+            <h2 class="text-lg font-bold">新增單字</h2>
+            <button type="button" data-import class="${cls.btnGhost}"><i data-lucide="file-up" class="size-4"></i>匯入單字檔</button>
+          </div>`}
       ${field('所屬群組', `<select name="groupId" class="${cls.input}">${groupOptions}</select>`)}
       <div class="grid gap-4 sm:grid-cols-2">
         ${field('單字', `<input name="word" maxlength="60" value="${esc(w?.word)}" placeholder="apple" class="${cls.input}">`)}
@@ -310,11 +300,17 @@ function wordForm(w = null, defaultGroupId = null) {
     if (d.imageUrl.trim() && !/^https?:\/\//i.test(d.imageUrl.trim())) return '圖片網址需以 http:// 或 https:// 開頭';
     return '';
   },
-  mountImagePicker).then((d) => d && ({
+  (form, dlg) => {
+    mountImagePicker(form);
+    form.querySelector('[data-import]')?.addEventListener('click', () => {
+      pending = { importFile: true, groupId: form.elements.groupId.value };
+      dlg.close();
+    });
+  }).then((d) => (d ? {
     ...d,
     isStarred: d.isStarred === 'on',
     imageCredit: d.creditName && d.creditUrl ? { name: d.creditName, url: d.creditUrl } : null
-  }));
+  } : pending));
 }
 
 /* ---------- 「搜尋圖片」：Unsplash（有 Key）／免 Key 圖庫 ---------- */
@@ -408,4 +404,17 @@ function importForm(defaultGroupId) {
     return '';
   },
   (form) => form.querySelector('[data-template]').addEventListener('click', downloadCsvTemplate));
+}
+
+/** 選群組＋選檔案後匯入；同群組已有的同名單字會略過 */
+async function runImport(defaultGroupId) {
+  const d = await importForm(defaultGroupId);
+  if (!d) return;
+  try {
+    const { words, invalid } = parseWordFile(await d.file.text(), d.file.name);
+    if (!words.length) { toast(invalid ? `有 ${invalid} 列缺少單字或中文翻譯` : '檔案裡沒有資料'); return; }
+    const { added, duplicates } = store.importWords(d.groupId, words);
+    toast(`已匯入 ${added} 個單字${duplicates ? `，略過 ${duplicates} 個重複` : ''}`);
+    rerender();
+  } catch (err) { toast(err.message); }
 }
