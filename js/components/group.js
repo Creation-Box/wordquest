@@ -3,6 +3,7 @@ import { store, POS_LABELS, FAMILIARITY_LABELS } from '../store.js';
 import { isSupported } from '../tts.js';
 import { searchImages, trackDownload } from '../images.js';
 import { esc, cls, formDialog, confirmDialog, toast } from '../ui.js';
+import { parseWordFile, MAX_FILE_BYTES, downloadCsvTemplate } from '../backup.js';
 
 let root = null;
 let param = null; // 目前所在群組 ID（單字列表頁）
@@ -57,6 +58,9 @@ function emptyState(icon, title, text, actionHtml = '') {
     </div>`;
 }
 
+const importBtnHtml = (groupId) =>
+  `<button type="button" data-action="import-words" data-group="${esc(groupId)}" class="${cls.btnGhost}"><i data-lucide="file-up" class="size-4"></i>匯入單字檔</button>`;
+
 const grid = (items) =>
   `<div class="masonry columns-1 sm:columns-2 xl:columns-3 gap-4">${items.join('')}</div>`;
 
@@ -68,7 +72,8 @@ function renderGroups() {
     ? `<button type="button" data-action="add-word" data-group="${esc(store.getGroups()[0].groupId)}" class="${cls.btnGhost}"><i data-lucide="book-plus" class="size-4"></i>新增單字</button>`
     : '';
 
-  root.innerHTML = heading('群組／單字庫', addWordBtn + addGroupBtn) + (groups.length
+  const importBtn = groups.length ? importBtnHtml(store.getGroups()[0].groupId) : '';
+  root.innerHTML = heading('群組／單字庫', importBtn + addWordBtn + addGroupBtn) + (groups.length
     ? grid(groups.map(groupCard))
     : emptyState('layers', '還沒有群組', '建立第一個群組，再把單字加進去。', addGroupBtn));
 }
@@ -98,7 +103,7 @@ function renderGroupDetail(g) {
     <a href="#/library" class="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 mb-3">
       <i data-lucide="chevron-left" class="size-4"></i>全部群組
     </a>`
-    + heading(esc(g.groupName), words.length ? addBtn : '', g.description)
+    + heading(esc(g.groupName), importBtnHtml(g.groupId) + (words.length ? addBtn : ''), g.description)
     + (words.length
       ? grid(words.map((w) => wordCard(w)))
       : emptyState('book-plus', '這個群組還沒有單字', '新增第一個單字開始收集。', addBtn));
@@ -211,6 +216,18 @@ async function onClick(e) {
       if (await confirmDialog({ title: `刪除「${w.word}」？`, message: '此動作無法復原。' })) {
         store.deleteWord(id); toast('已刪除單字'); rerender();
       }
+      break;
+    }
+    case 'import-words': { // 選群組＋選檔案；同群組已有的同名單字會略過
+      const d = await importForm(btn.dataset.group || param);
+      if (!d) break;
+      try {
+        const { words, invalid } = parseWordFile(await d.file.text(), d.file.name);
+        if (!words.length) { toast(invalid ? `有 ${invalid} 列缺少單字或中文翻譯` : '檔案裡沒有資料'); break; }
+        const { added, duplicates } = store.importWords(d.groupId, words);
+        toast(`已匯入 ${added} 個單字${duplicates ? `，略過 ${duplicates} 個重複` : ''}`);
+        rerender();
+      } catch (err) { toast(err.message); }
       break;
     }
     case 'toggle-star':
@@ -362,4 +379,33 @@ function mountImagePicker(form) {
       trackDownload(item, key);
     };
   });
+}
+
+/* ---------- 匯入單字檔（JSON／CSV） ---------- */
+function importForm(defaultGroupId) {
+  const groups = store.getGroups();
+  const cur = store.getGroup(defaultGroupId) ? defaultGroupId : groups[0]?.groupId;
+  return formDialog(`
+    <form class="grid gap-4" novalidate>
+      <h2 class="text-lg font-bold">匯入單字檔</h2>
+      ${field('匯入到群組', `<select name="groupId" class="${cls.input}">${groups.map((g) =>
+        `<option value="${esc(g.groupId)}" ${g.groupId === cur ? 'selected' : ''}>${esc(g.groupName)}</option>`).join('')}</select>`)}
+      ${field('單字檔（JSON 或 CSV）', `<input name="file" type="file" accept=".json,.csv,.txt,application/json,text/csv" class="${cls.input}">`)}
+      <p class="text-xs text-slate-500 dark:text-slate-400">
+        CSV 第一列要有欄位名稱（word、translation 等），沒有的話第一欄視為單字、第二欄視為中文翻譯、第三欄視為例句。同群組內已有的同名單字會略過。
+        <button type="button" data-template class="underline">下載 CSV 範本</button>
+      </p>
+      <p data-error hidden class="text-sm text-red-600 dark:text-red-400"></p>
+      <div class="flex justify-end gap-2">
+        <button type="button" data-cancel class="${cls.btnGhost}">取消</button>
+        <button type="submit" class="${cls.btnPrimary}">匯入</button>
+      </div>
+    </form>`,
+  (d) => {
+    if (!store.getGroup(d.groupId)) return '請先選擇群組';
+    if (!d.file || !d.file.size) return '請選擇要匯入的檔案';
+    if (d.file.size > MAX_FILE_BYTES) return '單字檔請小於 5 MB。';
+    return '';
+  },
+  (form) => form.querySelector('[data-template]').addEventListener('click', downloadCsvTemplate));
 }

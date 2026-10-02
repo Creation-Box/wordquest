@@ -11,6 +11,7 @@ export const POS_LABELS = {
 };
 export const FAMILIARITY_LABELS = { New: '新單字', Learning: '學習中', Mastered: '已熟練' };
 export const VIEW_MODES = ['auto', 'mobile', 'desktop'];
+export const UI_LANGS = ['zh', 'en', 'both']; // 介面語言：中文／英文／中英對照
 export const CLOUD_PROVIDERS = ['none', 'gist', 'gdrive', 'firebase'];
 
 const POS = Object.keys(POS_LABELS);
@@ -40,7 +41,8 @@ const createDefaults = () => ({
     voiceName: '',          // 指定的美式英語語音名稱；空字串＝自動
     onboarded: false,       // 是否看過新手導覽
     backupMilestone: 0,     // 已提醒過的單字數里程碑（20 的倍數）
-    cloudProvider: 'none',  // 雲端同步：none | gdrive | firebase
+    cloudProvider: 'none',  // 雲端同步：none | gist | gdrive | firebase
+    uiLang: 'both',         // 介面語言：zh 中文 | en 英文 | both 中英（預設）
     gdriveClientId: '',     // Google OAuth 用戶端 ID（使用者自己建立）
     firebaseConfig: '',     // Firebase 網頁應用程式的 firebaseConfig（文字）
     cloudAutoSync: true,    // 連線後，單字或群組有變動就自動上傳
@@ -111,6 +113,7 @@ export function normalizeData(raw) {
   if (!THEMES.includes(settings.theme)) settings.theme = base.settings.theme;
   if (!VIEW_MODES.includes(settings.viewMode)) settings.viewMode = base.settings.viewMode;
   if (!PLAY_ORDERS.includes(settings.playOrder)) settings.playOrder = base.settings.playOrder;
+  if (!UI_LANGS.includes(settings.uiLang)) settings.uiLang = base.settings.uiLang;
   settings.speechRate = nearestRate(settings.speechRate);
   settings.bilingualSpeech = Boolean(settings.bilingualSpeech);
   settings.unsplashKey = str(settings.unsplashKey, 100);
@@ -178,6 +181,7 @@ export const store = {
     if ('theme' in p && !THEMES.includes(p.theme)) delete p.theme;
     if ('viewMode' in p && !VIEW_MODES.includes(p.viewMode)) delete p.viewMode;
     if ('playOrder' in p && !PLAY_ORDERS.includes(p.playOrder)) delete p.playOrder;
+    if ('uiLang' in p && !UI_LANGS.includes(p.uiLang)) delete p.uiLang;
     if ('cloudProvider' in p && !CLOUD_PROVIDERS.includes(p.cloudProvider)) delete p.cloudProvider;
     if ('speechRate' in p) p.speechRate = nearestRate(p.speechRate);
     if ('unsplashKey' in p) p.unsplashKey = str(p.unsplashKey, 100);

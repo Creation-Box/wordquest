@@ -9,6 +9,7 @@ import * as study from './components/flashcard.js';
 import * as quiz from './components/modes.js';
 import * as settings from './components/settings.js';
 import { maybeShowOnboarding } from './components/onboarding.js';
+import { initI18n } from './i18n.js';
 
 const routes = {
   library:  { title: '群組／單字庫', view: library },
@@ -150,6 +151,7 @@ document.querySelectorAll('a[href="#/library"]').forEach((a) => {
 
 store.subscribe(() => { applyTheme(); applyViewMode(); syncHeader(); });
 
+initI18n(); // 介面語言（中文／English／中英），要在第一次畫面渲染前啟動
 initSpeakButtons();
 applyTheme();
 applyViewMode();

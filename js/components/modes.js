@@ -1,17 +1,17 @@
 // 測驗模式：先選範圍與順序，再挑 6 種玩法
-// 翻卡（導向學習模式）／連連看／聽音辨識／限時速刷／單字填空／默寫練習
+// 翻卡（導向學習模式）／連連看／聽音辨識／限時速刷／單字填空／默寫練習（填空與默寫都是一字母一格）
 // 路由：#/quiz 是選單，#/quiz/<mode> 直接開始（mode＝match | listen | timed | fill | spell）
 import { store, POS_LABELS } from '../store.js';
 import { speak, stop as stopSpeech, isSupported } from '../tts.js';
 import { esc, cls, toast } from '../ui.js';
 
 const MODES = [
-  { id: 'flip',   label: '翻卡',     icon: 'gallery-horizontal', desc: '翻面看中文，左右滑動換卡，雙語發音', href: '#/study' },
+  { id: 'flip',   label: '翻卡',     icon: 'gallery-horizontal', desc: '翻面看中文，左右滑動換卡，發音依顯示面', href: '#/study' },
   { id: 'match',  label: '連連看',   icon: 'link-2',             desc: '把英文和中文配成一對，一輪 6 組' },
   { id: 'listen', label: '聽音辨識', icon: 'ear',                desc: '聽發音，選出正確的單字' },
   { id: 'timed',  label: '限時速刷', icon: 'timer',              desc: '60 秒內看英文選中文，答越多越好' },
-  { id: 'fill',   label: '單字填空', icon: 'text-cursor-input',  desc: '看中文和例句，把缺的單字補上' },
-  { id: 'spell',  label: '默寫練習', icon: 'keyboard',           desc: '看中文（可聽發音），把單字拼出來' }
+  { id: 'fill',   label: '單字填空', icon: 'text-cursor-input',  desc: '看中文和例句，把缺的字母補上' },
+  { id: 'spell',  label: '默寫練習', icon: 'keyboard',           desc: '看中文（可聽發音），一格一格拼出單字' }
 ];
 const MATCH_ROUND = 6;
 const TIMED_SECONDS = 60;
@@ -22,6 +22,7 @@ let timer = null;      // 限時速刷的倒數
 let later = null;      // 延遲動作（自動下一題、翻錯後復原）
 let scope = 'all';     // 'all' | 'starred' | groupId
 let order = '';        // '' = 跟隨設定的播放順序
+let matchSound = false; // 連連看是否播放英文發音（預設關閉，頁面上可切換）
 
 const $ = (sel) => root.querySelector(sel);
 const icons = () => window.lucide?.createIcons();
@@ -55,7 +56,7 @@ function poolIds() {
 }
 
 /* ---------- 共用樣式與外框 ---------- */
-const OPT = 'w-full text-left rounded-xl border px-4 py-3 text-base font-medium bg-white dark:bg-slate-900 transition-colors';
+const OPT = 'w-full text-left rounded-xl border px-4 py-3 md:py-4 text-base md:text-lg font-medium bg-white dark:bg-slate-900 transition-colors';
 const OPT_STATE = {
   idle: 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
   ok:   'border-teal-600 bg-teal-50 text-teal-900 dark:border-teal-400 dark:bg-teal-400/15 dark:text-teal-200',
@@ -65,7 +66,7 @@ const OPT_STATE = {
 
 function shell(title, right, body) {
   root.innerHTML = `
-    <div class="max-w-md mx-auto">
+    <div class="max-w-md md:max-w-3xl mx-auto">
       <div class="flex items-center justify-between gap-3 mb-4">
         <button type="button" data-action="exit" aria-label="返回測驗選單" class="${cls.iconBtn}"><i data-lucide="arrow-left" class="size-5"></i></button>
         <h2 class="font-bold">${esc(title)}</h2>
@@ -107,8 +108,8 @@ function showSetup() {
   const ord = orderNow();
 
   root.innerHTML = `
-    <div class="max-w-xl grid gap-6">
-      <section class="${cls.card} p-5 grid gap-4">
+    <div class="grid gap-6">
+      <section class="${cls.card} p-5 grid gap-4 max-w-3xl">
         <div class="grid grid-cols-2 gap-3">
           <label class="grid gap-1.5 text-sm">範圍
             <select id="q-scope" class="${cls.input}">
@@ -127,7 +128,7 @@ function showSetup() {
         <p class="text-sm text-slate-500 dark:text-slate-400">這個範圍共 ${count} 個單字${count ? '' : '，先到單字庫新增，或換一個範圍'}。</p>
       </section>
 
-      <div class="grid sm:grid-cols-2 gap-3">
+      <div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
         ${MODES.map((m) => {
           const off = m.id === 'listen' && !isSupported;
           const inner = `
@@ -200,7 +201,7 @@ function drawChoice() {
   const field = timed ? 'translation' : 'word';
 
   const prompt = timed
-    ? `<p class="font-display text-4xl font-bold break-words">${esc(w.word)}</p>
+    ? `<p class="font-display text-4xl md:text-6xl font-bold break-words">${esc(w.word)}</p>
        ${w.phonetic ? `<p class="mt-1 text-slate-500 dark:text-slate-400">${esc(w.phonetic)}</p>` : ''}`
     : `<button type="button" data-action="say" aria-label="再聽一次" class="${cls.btnGhost} size-20 !p-0 rounded-full mx-auto">
          <i data-lucide="volume-2" class="size-9"></i>
@@ -225,7 +226,7 @@ function drawChoice() {
   shell(modeLabel(),
     timed ? `<span id="tm">${g.time}</span> 秒　答對 ${g.correct}` : `${g.i + 1} / ${g.ids.length}`,
     `${bar}
-     <div class="${cls.card} p-6 text-center">${prompt}</div>
+     <div class="${cls.card} p-6 md:p-10 text-center">${prompt}</div>
      <div class="mt-4 grid gap-2">${opts}</div>
      <div class="mt-4 grid gap-3">${answer}</div>`);
   if (!timed && g.answered) $('[data-action="next"]')?.focus();
@@ -314,7 +315,11 @@ function drawMatch() {
       class="${OPT} ${st} !px-3 !py-3 text-center break-words">${esc(label)}</button>`;
   };
   shell(modeLabel(), `${g.round + 1} / ${g.chunks.length}`, `
-    <p class="mb-3 text-sm text-center text-slate-500 dark:text-slate-400">各點一個英文和一個中文，配成一對</p>
+    <div class="mb-3 flex items-center justify-between gap-3">
+      <p class="text-sm text-slate-500 dark:text-slate-400">各點一個英文和一個中文，配成一對</p>
+      ${isSupported ? `<button type="button" data-action="match-sound" aria-pressed="${matchSound}" aria-label="切換英文發音"
+        class="${cls.btnGhost} !px-3 !py-1.5 shrink-0"><i data-lucide="${matchSound ? 'volume-2' : 'volume-x'}" class="size-4"></i>${matchSound ? '發音：開' : '發音：關'}</button>` : ''}
+    </div>
     <div class="grid grid-cols-2 gap-3">
       <div class="grid gap-2 content-start">${g.left.map((id) => tile('L', id, store.getWord(id).word)).join('')}</div>
       <div class="grid gap-2 content-start">${g.right.map((id) => tile('R', id, store.getWord(id).translation)).join('')}</div>
@@ -324,7 +329,7 @@ function drawMatch() {
 function pickTile(side, id) {
   const g = G;
   if (!g || g.bad || g.done.has(id)) return;
-  if (side === 'L' && isSupported) speak(store.getWord(id).word);
+  if (side === 'L' && matchSound && isSupported) speak(store.getWord(id).word);
 
   if (!g.sel || g.sel.side === side) { g.sel = { side, id }; return drawMatch(); }
 
@@ -357,48 +362,121 @@ function askTyped() {
   G.curId = G.ids[G.i];
   G.answered = false;
   G.hint = 0;
-  G.typed = '';
   G.ok = false;
+  G.lastCell = -1;
+  G.cells = buildCells(cur().word, G.mode);
   drawTyped();
-  $('#q-input')?.focus();
+  const first = G.cells.findIndex((c) => c.t === 'edit');
+  if (first >= 0) focusCell(first);
 }
 
-const pattern = (word, shown) =>
-  [...word].map((c, i) => (c === ' ' ? '\u00A0\u00A0' : i < shown ? c : '_')).join(' ');
+/* ----- 字母格：一個字母一個框 -----
+   cells 的 t（type）：
+     edit  可輸入的框        given 單字填空預先顯示的字母（鎖定）
+     hint  按提示補上的字母（鎖定）   fixed 連字號、撇號等符號（只顯示）   space 單字之間的空格 */
+const isLetter = (c) => /[\p{L}\p{N}]/u.test(c);
+
+function buildCells(word, mode) {
+  const cells = [...word].map((ch) =>
+    ch === ' ' ? { t: 'space', ch } : isLetter(ch) ? { t: 'edit', ch, val: '' } : { t: 'fixed', ch });
+
+  // 單字填空：隨機挖掉部分字母，保底至少顯示 1 個字母（例如 Blue → B _ u _）
+  if (mode === 'fill') {
+    const idx = cells.map((c, i) => (c.t === 'edit' ? i : -1)).filter((i) => i >= 0);
+    if (idx.length >= 2) { // 只有 1 個字母的單字沒辦法既顯示又挖空，維持全空
+      const keep = 1 + Math.floor(Math.random() * Math.ceil(idx.length / 2)); // 顯示 1 ~ 一半（無條件進位）
+      shuffle(idx).slice(0, keep).forEach((i) => { cells[i].t = 'given'; cells[i].val = cells[i].ch; });
+    }
+  }
+  return cells;
+}
+
+const sameLetter = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+const nextEdit = (i, dir) => {
+  for (let j = i + dir; j >= 0 && j < G.cells.length; j += dir) if (G.cells[j].t === 'edit') return j;
+  return -1;
+};
+const cellEl = (i) => root.querySelector(`[data-cell="${i}"]`);
+
+function focusCell(i) {
+  const el = cellEl(i);
+  if (!el) return;
+  el.focus();
+  el.select?.();
+}
+
+function setCell(i, v) {
+  G.cells[i].val = v;
+  const el = cellEl(i);
+  if (el) el.value = v;
+}
+
+const BOX = 'grid place-items-center rounded-lg border-2 font-display font-bold text-center leading-none p-0 outline-none';
+const BOX_LOCKED = {
+  given: 'bg-teal-50 border-teal-300 text-teal-800 dark:bg-teal-400/10 dark:border-teal-500/50 dark:text-teal-200',
+  hint:  'bg-amber-50 border-amber-400 text-amber-800 dark:bg-amber-400/10 dark:border-amber-400/60 dark:text-amber-200'
+};
+const BOX_IDLE = 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-teal-600 focus:ring-2 focus:ring-teal-600/30 dark:focus:border-teal-400 dark:focus:ring-teal-400/30';
+
+function cellsHtml() {
+  const g = G;
+  const n = g.cells.filter((c) => c.t === 'edit' || c.t === 'given' || c.t === 'hint').length;
+  const size = n <= 8 ? 'size-11 md:size-14 text-2xl md:text-3xl' : n <= 12 ? 'size-9 md:size-12 text-xl md:text-2xl' : 'size-8 text-lg';
+
+  // 以空格切成一個個單字，避免換行時把同一個單字拆在兩邊
+  const groups = [];
+  let curGroup = null;
+  g.cells.forEach((c, i) => {
+    if (c.t === 'space') { curGroup = null; return; }
+    if (!curGroup) { curGroup = []; groups.push(curGroup); }
+    curGroup.push([c, i]);
+  });
+
+  const one = (c, i) => {
+    if (c.t === 'fixed') return `<span class="self-center px-0.5 font-display text-2xl text-slate-500 dark:text-slate-400">${esc(c.ch)}</span>`;
+    if (c.t === 'given' || c.t === 'hint') return `<span class="${BOX} ${size} ${BOX_LOCKED[c.t]}">${esc(c.val)}</span>`;
+    if (g.answered) { // 作答後：對的綠色、錯的紅色，沒填的顯示正確字母（淡色）
+      const right = sameLetter(c.val, c.ch);
+      return `<span class="${BOX} ${size} ${right ? OPT_STATE.ok : OPT_STATE.bad} ${c.val ? '' : 'opacity-60'}">${esc(c.val || c.ch)}</span>`;
+    }
+    return `<input data-cell="${i}" type="text" value="${esc(c.val)}" aria-label="第 ${i + 1} 個字母"
+      autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"
+      class="${BOX} ${size} ${BOX_IDLE}">`;
+  };
+
+  return groups
+    .map((grp) => `<span class="flex flex-wrap justify-center gap-1">${grp.map(([c, i]) => one(c, i)).join('')}</span>`)
+    .join('');
+}
 
 function drawTyped() {
   const g = G, w = cur();
-  const spell = g.mode === 'spell';
   const pos = POS_LABELS[w.partOfSpeech];
 
-  let prompt = `<p class="text-3xl font-bold break-words">${esc(w.translation)}</p>
+  let prompt = `<p class="text-3xl md:text-4xl font-bold break-words">${esc(w.translation)}</p>
     ${pos ? `<p class="mt-1 text-sm text-slate-500 dark:text-slate-400">${pos}</p>` : ''}`;
-  if (spell) {
-    if (isSupported) prompt += `<button type="button" data-action="say" class="${cls.btnGhost} mt-3"><i data-lucide="volume-2" class="size-4"></i>聽發音</button>`;
-  } else if (w.example) {
+  if (g.mode === 'fill' && w.example) {
     const re = new RegExp(reEsc(w.word), 'gi');
     const blanked = re.test(w.example) ? w.example.replace(re, '＿＿＿＿') : '';
     if (blanked) prompt += `<p class="mt-3 text-sm italic text-slate-600 dark:text-slate-300 break-words">${esc(blanked)}</p>`;
   }
+  // 單字填空、默寫練習都可以播放英文單字
+  if (isSupported) prompt += `<button type="button" data-action="say" class="${cls.btnGhost} mt-3"><i data-lucide="volume-2" class="size-4"></i>${g.mode === 'fill' ? '播放英文' : '聽發音'}</button>`;
 
-  const shown = g.answered ? w.word.length : g.hint;
-  const state = !g.answered ? '' : g.ok ? OPT_STATE.ok : OPT_STATE.bad;
   const feedback = !g.answered ? '' : g.ok
-    ? `<p class="text-center text-sm text-teal-700 dark:text-teal-300">答對了！${g.hint ? '（用了提示，不列入答對）' : ''}</p>`
+    ? `<p class="text-center text-sm text-teal-700 dark:text-teal-300">答對了！${g.hint ? `（用了 ${g.hint} 次提示）` : ''}</p>`
     : `<p class="text-center text-sm text-red-700 dark:text-red-300">正確答案：<b>${esc(w.word)}</b></p>`;
-  const exampleFull = g.answered && !spell && w.example
+  const exampleFull = g.answered && g.mode === 'fill' && w.example
     ? `<p class="text-center text-sm italic text-slate-500 dark:text-slate-400 break-words">${esc(w.example)}</p>` : '';
+  const hasBlank = g.cells.some((c) => c.t === 'edit');
 
   shell(modeLabel(), `${g.i + 1} / ${g.ids.length}`, `
-    <div class="${cls.card} p-6 text-center">${prompt}</div>
-    <form data-form="typed" class="mt-4 grid gap-3" autocomplete="off">
-      <p class="text-center font-display text-xl tracking-widest break-all" aria-label="字母提示">${esc(pattern(w.word, shown))}</p>
-      <input id="q-input" name="a" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
-        placeholder="輸入英文單字" ${g.answered ? 'readonly' : ''} value="${esc(g.typed)}"
-        class="${cls.input} text-center text-lg ${state}">
+    <div class="${cls.card} p-6 md:p-10 text-center">${prompt}</div>
+    <form data-form="typed" class="mt-4 grid gap-4" autocomplete="off">
+      <div id="q-cells" role="group" aria-label="作答格" class="flex flex-wrap justify-center gap-x-4 gap-y-2">${cellsHtml()}</div>
       ${feedback}${exampleFull}
       <div class="flex gap-2">
-        <button type="button" data-action="hint" ${g.answered || g.hint >= w.word.length ? 'disabled' : ''} class="${cls.btnGhost}">
+        <button type="button" data-action="hint" ${g.answered || !hasBlank ? 'disabled' : ''} class="${cls.btnGhost}">
           <i data-lucide="lightbulb" class="size-4"></i>提示
         </button>
         <button type="submit" class="${cls.btnPrimary} flex-1">${g.answered ? (g.i + 1 >= g.ids.length ? '看結果' : '下一題') : '檢查'}</button>
@@ -407,19 +485,96 @@ function drawTyped() {
   if (g.answered) $('button[type="submit"]')?.focus();
 }
 
-function checkTyped(value) {
-  const g = G, w = cur();
+/** 提示：補上一格正確字母。優先補目前選中的格子，其次是第一個還沒填對的格子。補上的格子鎖定，仍可列入答對。 */
+function useHint() {
+  const g = G;
+  if (!g || g.answered) return;
+  const wrongAt = (i) => g.cells[i]?.t === 'edit' && !sameLetter(g.cells[i].val, g.cells[i].ch);
+  let target = wrongAt(g.lastCell) ? g.lastCell : g.cells.findIndex((c, i) => wrongAt(i));
+  if (target < 0) { toast('所有字母都已經填對了，按「檢查」就可以了'); return; }
+
+  const c = g.cells[target];
+  c.t = 'hint';
+  c.val = c.ch;
+  g.hint++;
+  $('#q-cells').innerHTML = cellsHtml();
+
+  const nxt = nextEdit(target, 1);
+  const fallback = g.cells.findIndex((x) => x.t === 'edit');
+  const f = nxt >= 0 ? nxt : fallback;
+  if (f >= 0) focusCell(f);
+  else $('button[type="submit"]')?.focus();
+  g.lastCell = f;
+  if (!g.cells.some((x) => x.t === 'edit')) $('[data-action="hint"]')?.setAttribute('disabled', '');
+}
+
+function checkTyped() {
+  const g = G;
   if (g.answered) return;
   g.answered = true;
-  g.typed = value;
-  g.ok = norm(value) === norm(w.word);
-  if (g.ok && g.hint === 0) g.correct++; else g.wrong.add(g.curId);
+  g.ok = g.cells.every((c) => c.t !== 'edit' || sameLetter(c.val, c.ch));
+  if (g.ok) g.correct++; else g.wrong.add(g.curId);
   drawTyped();
 }
 
 function nextTyped() {
   G.i++;
   if (G.i >= G.ids.length) finish(); else askTyped();
+}
+
+/* ----- 字母格的鍵盤／貼上處理 ----- */
+const cellOf = (e) => (G && !G.answered ? e.target.closest?.('[data-cell]') : null);
+
+function onCellInput(e) {
+  const el = cellOf(e);
+  if (!el) return;
+  const i = Number(el.dataset.cell);
+  const ch = [...el.value].filter((c) => !/\s/.test(c)).at(-1) ?? ''; // 格子裡已有字時，保留新打的那一個
+  setCell(i, ch);
+  if (ch) { const n = nextEdit(i, 1); if (n >= 0) focusCell(n); }
+}
+
+function onCellKey(e) {
+  const el = cellOf(e);
+  if (!el) return;
+  const i = Number(el.dataset.cell);
+  if (e.key === 'Backspace') {
+    e.preventDefault();
+    if (G.cells[i].val) { setCell(i, ''); return; }
+    const p = nextEdit(i, -1);
+    if (p >= 0) { setCell(p, ''); focusCell(p); }
+  } else if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    const p = nextEdit(i, -1);
+    if (p >= 0) focusCell(p);
+  } else if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    const n = nextEdit(i, 1);
+    if (n >= 0) focusCell(n);
+  }
+}
+
+function onCellPaste(e) {
+  const el = cellOf(e);
+  if (!el) return;
+  e.preventDefault();
+  const text = (e.clipboardData || window.clipboardData)?.getData('text') ?? '';
+  let j = Number(el.dataset.cell);
+  let last = j;
+  for (const ch of [...text].filter(isLetter)) {
+    if (j < 0) break;
+    setCell(j, ch);
+    last = j;
+    j = nextEdit(j, 1);
+  }
+  focusCell(j >= 0 ? j : last);
+}
+
+function onCellFocus(e) {
+  const el = cellOf(e);
+  if (!el) return;
+  G.lastCell = Number(el.dataset.cell);
+  el.select?.(); // 點到有字的格子時整格選取，直接打字就是取代
 }
 
 /* =====================================================================
@@ -445,7 +600,7 @@ function finish() {
   const wrongWords = [...g.wrong].map((id) => store.getWord(id)).filter(Boolean);
 
   shell(modeLabel(), '', `
-    <div class="${cls.card} p-6 text-center grid gap-1">
+    <div class="${cls.card} p-6 md:p-10 text-center grid gap-1">
       <p class="font-display text-5xl font-bold">${g.correct}<span class="text-2xl text-slate-400"> / ${total}</span></p>
       <p class="text-slate-500 dark:text-slate-400">${total ? `答對率 ${pct}%` : ''}</p>
       <p class="mt-1 text-sm">${msg}</p>
@@ -499,14 +654,12 @@ function onClick(e) {
       if (G?.curId) speak(cur().word);
       break;
     case 'hint':
-      if (G && !G.answered) {
-        G.typed = $('#q-input')?.value ?? '';
-        G.hint = Math.min(G.hint + 1, cur().word.length);
-        drawTyped();
-        const input = $('#q-input');
-        input?.focus();
-        input?.setSelectionRange(input.value.length, input.value.length);
-      }
+      useHint();
+      break;
+    case 'match-sound':
+      matchSound = !matchSound;
+      if (!matchSound) stopSpeech();
+      if (G?.mode === 'match') drawMatch();
       break;
     case 'star-wrong': {
       let n = 0;
@@ -530,7 +683,7 @@ function onSubmit(e) {
   e.preventDefault();
   if (!G) return;
   if (G.answered) nextTyped();
-  else checkTyped(e.target.elements.a.value);
+  else checkTyped();
 }
 
 /* ---------- 進入點（app.js 的 Router 呼叫） ---------- */
@@ -540,6 +693,13 @@ export function render(el, param) {
   root.onclick = onClick;
   root.onchange = onChange;
   root.onsubmit = onSubmit;
+  root.oninput = onCellInput;
+  root.onkeydown = onCellKey;
+  root.onpaste = onCellPaste;
+  if (!root.dataset.cellFocus) { // focusin 沒有 on* 屬性，只綁一次
+    root.addEventListener('focusin', onCellFocus);
+    root.dataset.cellFocus = '1';
+  }
 
   const mode = MODES.find((m) => m.id === param && !m.href);
   if (mode) start(mode.id);

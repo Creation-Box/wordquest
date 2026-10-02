@@ -1,0 +1,57 @@
+/* ===== v6 外觀：放大版面、淺色美化、深色層次 ===== */
+
+/* 整體放大：大螢幕提高基準字級（rem 為單位的版面跟著放大） */
+@media (min-width: 1024px) { html:not(.view-mobile) { font-size: 17px; } }
+@media (min-width: 1536px) { html:not(.view-mobile) { font-size: 18px; } }
+
+/* ---------- 淺色 ---------- */
+html:not(.dark) body {
+  background:
+    radial-gradient(900px 420px at 100% -5%, rgb(20 184 166 / .16), transparent 70%),
+    radial-gradient(800px 480px at -5% 105%, rgb(56 189 248 / .14), transparent 70%),
+    #f3f8f8;
+  background-attachment: fixed;
+}
+html:not(.dark) #app aside {
+  background: linear-gradient(180deg, #fff, #f0fdfa);
+  border-color: #d5ece8; box-shadow: 4px 0 24px -12px rgb(15 118 110 / .25);
+}
+html:not(.dark) .app-header {
+  background: rgb(255 255 255 / .78); border-color: #d5ece8;
+  box-shadow: 0 6px 24px -16px rgb(15 118 110 / .35);
+}
+html:not(.dark) .wq-card {
+  background: #fff; border-color: #dbeceb;
+  box-shadow: 0 1px 2px rgb(15 118 110 / .06), 0 10px 28px -14px rgb(15 118 110 / .22);
+  transition: transform .15s, box-shadow .15s, border-color .15s;
+}
+html:not(.dark) article.wq-card:hover, html:not(.dark) a.wq-card:hover, html:not(.dark) button.wq-card:hover {
+  transform: translateY(-2px); border-color: #7fd0c4;
+  box-shadow: 0 2px 4px rgb(15 118 110 / .08), 0 16px 36px -14px rgb(15 118 110 / .35);
+}
+html:not(.dark) .wq-primary {
+  background-image: linear-gradient(135deg, #0f766e, #14b8a6);
+  box-shadow: 0 6px 16px -6px rgb(15 118 110 / .55);
+}
+html:not(.dark) .wq-primary:hover { filter: brightness(1.07); }
+html:not(.dark) .nav-link[aria-current="page"] {
+  background: linear-gradient(135deg, #0f766e, #14b8a6); box-shadow: 0 6px 16px -8px rgb(15 118 110 / .6);
+}
+html:not(.dark) .wq-input { border-color: #c9dedc; }
+html:not(.dark) .wq-input:focus { border-color: #0f766e; box-shadow: 0 0 0 3px rgb(20 184 166 / .18); }
+html:not(.dark) .wq-dialog { border-color: #d5ece8; box-shadow: 0 24px 60px -16px rgb(15 118 110 / .4); }
+
+/* ---------- 深色：背景維持深黑，但卡片、側欄、輸入框一層一層分開 ---------- */
+html.dark body { background: #0b1220; }
+html.dark #app aside { background: #111a2d; border-color: #2a3a5a; }
+html.dark .app-header { background: rgb(17 26 45 / .92); border-color: #2a3a5a; }
+html.dark .wq-card {
+  background: #18233b; border-color: #34476b;
+  box-shadow: 0 1px 0 rgb(255 255 255 / .05) inset, 0 8px 24px -12px rgb(0 0 0 / .65);
+  transition: border-color .15s;
+}
+html.dark article.wq-card:hover, html.dark a.wq-card:hover, html.dark button.wq-card:hover { border-color: #2dd4bf; }
+html.dark .wq-input { background: #0f1a2e; border-color: #41567f; }
+html.dark .wq-input:focus { border-color: #2dd4bf; box-shadow: 0 0 0 3px rgb(45 212 191 / .2); }
+html.dark .wq-dialog { background: #18233b; border-color: #3b4d73; }
+html.dark .tab-link { border-top: 1px solid transparent; }

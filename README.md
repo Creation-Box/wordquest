@@ -13,13 +13,14 @@ ES Modules 不能用 `file://` 直接開，請在專案資料夾啟動本機伺�
 
 ## 功能
 - 群組／單字庫：群組與單字的新增、編輯、刪除、搜尋、★ 收藏、圖片（Unsplash 或貼網址）
-- 學習模式：翻卡、左右滑動、雙語發音
-- 測驗模式：連連看、聽音辨識、限時速刷、單字填空、默寫練習（翻卡導向學習模式）
+- 學習模式：翻卡、左右滑動；🔊 只唸目前看到的那一面（英文面唸英文、中文面唸中文）
+- 測驗模式：連連看（預設不發音，頁面上可開關）、聽音辨識、限時速刷、單字填空（隨機挖字母、至少顯示 1 個、一字母一格、可播放英文）、默寫練習（一字母一格）（翻卡導向學習模式）
+  - 填空／默寫的「提示」會補上一格正確字母並鎖定，用了提示仍可列入答對
 - 系統設定：主題、檢視模式、語音與語速、Unsplash Key、群組 JSON／CSV 匯入匯出、完整備份與還原、每 20 個單字的備份提醒、雲端同步（GitHub Gist／Google Drive／Firebase）、新手導覽
 
 ## 檔案結構
     index.html
-    css/custom.css, css/phase5.css
+    css/custom.css, css/phase5.css, css/theme.css
     js/app.js            Router、主題、檢視模式、搜尋
     js/store.js          LocalStorage 資料層
     js/ui.js             共用 UI（對話框、toast、樣式常數）
@@ -28,6 +29,8 @@ ES Modules 不能用 `file://` 直接開，請在專案資料夾啟動本機伺�
     js/backup.js         匯入匯出、備份與提醒
     js/cloud.js          雲端同步引擎（狀態、衝突判斷、自動上傳）
     js/cloud-adapters.js GitHub Gist／Google Drive／Firebase 連線
+    js/share.js          群組分享（產生 Gist 連結；尚未接上畫面）
+    js/i18n.js           介面語言（中文／English／中英對照），依字典即時換字
     js/components/       group、flashcard、modes、settings、onboarding
 
 ## 雲端同步
@@ -45,3 +48,9 @@ ES Modules 不能用 `file://` 直接開，請在專案資料夾啟動本機伺�
 
 ## 備註
 - 完整備份檔含 Unsplash Key，分享前請留意。
+
+## v6 更新
+- 版面放大：桌面版學習、測驗、系統設定改用更寬的版面（設定頁大螢幕為雙欄），大螢幕基準字級也放大。
+- 系統設定新增「介面語言」：中文介面、English UI、中英介面（預設）。翻譯字典在 `js/i18n.js`，沒收錄的字串維持中文。
+- 單字庫（列表與群組頁）新增「匯入單字檔」，可選群組後匯入 JSON／CSV。
+- 淺色主題加上柔和漸層與卡片陰影；深色主題卡片、側欄、輸入框分層更清楚。

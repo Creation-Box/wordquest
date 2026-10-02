@@ -27,13 +27,19 @@ const VIEWS = [
   { id: 'desktop', label: '電腦 Dashboard', icon: 'monitor' }
 ];
 
+const LANGS = [
+  { id: 'zh', label: '中文介面' },
+  { id: 'en', label: 'English UI' },
+  { id: 'both', label: '中英介面' }
+];
+
 /* ---------- 版面片段 ---------- */
 const chosen = (on) => (on
   ? 'border-teal-700 bg-teal-50 text-teal-900 dark:border-teal-400 dark:bg-teal-400/15 dark:text-teal-200'
   : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800');
 
-const section = (title, desc, body) => `
-  <section class="${cls.card} p-5 grid gap-4">
+const section = (title, desc, body, wide = false) => `
+  <section class="${cls.card} p-5 grid gap-4 ${wide ? 'lg:col-span-2' : ''}">
     <div>
       <h2 class="font-bold">${title}</h2>
       ${desc ? `<p class="mt-1 text-sm text-slate-500 dark:text-slate-400">${desc}</p>` : ''}
@@ -239,6 +245,16 @@ export function render(el) {
 
   const appearance = `
     <div>
+      <p class="text-sm mb-2">介面語言</p>
+      <div class="grid grid-cols-3 gap-2" role="group" data-no-i18n>
+        ${LANGS.map((l) => `
+          <button type="button" data-ui-lang="${l.id}" aria-pressed="${s.uiLang === l.id}"
+            class="flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-sm font-medium text-center ${chosen(s.uiLang === l.id)}">
+            <i data-lucide="languages" class="size-5"></i>${l.label}
+          </button>`).join('')}
+      </div>
+    </div>
+    <div>
       <p class="text-sm mb-2">主題</p>
       <div class="grid grid-cols-3 gap-2" role="group" aria-label="主題">
         ${THEMES.map((t) => `
@@ -346,13 +362,13 @@ export function render(el) {
     </button>`;
 
   root.innerHTML = `
-    <div class="max-w-xl grid gap-6">
+    <div class="grid gap-6 lg:grid-cols-2 items-start">
       ${section('外觀', '', appearance)}
       ${section('語音朗讀', '', voice)}
       ${section('圖片搜尋', '填入 Unsplash Access Key，新增單字時就能搜尋 Unsplash 照片；沒填則使用免 Key 圖庫。', unsplash)}
       ${section('單字匯入與匯出', '以群組為單位，和別人分享或整理單字。', wordIO)}
       ${section('完整備份與還原', '一次保存或還原全部的設定、群組與單字。', backup)}
-      ${section('雲端同步', '用 GitHub Gist、Google Drive 或 Firebase，讓多台裝置共用同一份單字。', cloudBody)}
+      ${section('雲端同步', '用 GitHub Gist、Google Drive 或 Firebase，讓多台裝置共用同一份單字。', cloudBody, true)}
       ${section('新手導覽', '', help)}
       ${section('資料', '', danger)}
     </div>`;
@@ -367,12 +383,13 @@ export function render(el) {
 
 /* ---------- 事件 ---------- */
 async function onClick(e) {
-  const btn = e.target.closest('[data-theme], [data-view-mode], [data-rate], [data-action]');
+  const btn = e.target.closest('[data-theme], [data-view-mode], [data-rate], [data-ui-lang], [data-action]');
   if (!btn || !root.contains(btn)) return;
   const d = btn.dataset;
 
   if (d.theme) { store.setSettings({ theme: d.theme }); return again(); }
   if (d.viewMode) { store.setSettings({ viewMode: d.viewMode }); return again(); }
+  if (d.uiLang) { store.setSettings({ uiLang: d.uiLang }); return again(); }
   if (d.rate) { store.setSettings({ speechRate: Number(d.rate) }); return again(); }
 
   switch (d.action) {

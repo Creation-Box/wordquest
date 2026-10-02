@@ -1,6 +1,6 @@
 // 學習模式：翻卡 + 左右滑動切換 + 雙語發音
 import { store, POS_LABELS } from '../store.js';
-import { isSupported } from '../tts.js';
+import { isSupported, speak } from '../tts.js';
 import { esc, cls } from '../ui.js';
 
 const SWIPE_MIN = 60;      // 最小滑動距離（px）
@@ -12,6 +12,7 @@ let scope = 'all';         // 'all' | 'starred' | groupId
 let deck = [];             // 單字 id 陣列（依 playOrder 決定是否洗牌）
 let index = 0;
 let busy = false;
+let playId = 0;           // 發音播放編號，避免舊的播放結束時誤清除新的播放狀態
 
 const shuffle = (a) => {
   for (let i = a.length - 1; i > 0; i--) {
@@ -41,7 +42,7 @@ export function render(el) {
 
   const sel = (v) => (scope === v ? 'selected' : '');
   root.innerHTML = `
-    <div class="max-w-md mx-auto">
+    <div class="max-w-md md:max-w-3xl mx-auto">
       <div class="flex items-center justify-between gap-3 mb-4">
         <select id="fc-scope" aria-label="學習範圍" class="${cls.input} w-auto max-w-[70%]">
           <option value="all" ${sel('all')}>全部單字</option>
@@ -80,12 +81,12 @@ function drawBody() {
   body.innerHTML = `
     <div id="fc-stage" class="flip-scene swipe-area">
       <div id="fc-drag" style="will-change: transform">
-        <div id="fc-card" class="flip-card h-80" tabindex="0" role="button" aria-label="點擊翻面，左右滑動切換單字卡"></div>
+        <div id="fc-card" class="flip-card h-80 md:h-[30rem]" tabindex="0" role="button" aria-label="點擊翻面，左右滑動切換單字卡"></div>
       </div>
     </div>
     <div class="mt-6 flex items-center justify-center gap-3">
       <button type="button" id="fc-prev" aria-label="上一張" class="${round}"><i data-lucide="chevron-left" class="size-5"></i></button>
-      ${isSupported ? `<button type="button" id="fc-speak" aria-label="播放發音" class="${round}"><i data-lucide="volume-2" class="size-5"></i></button>` : ''}
+      ${isSupported ? `<button type="button" id="fc-speak" aria-label="播放英文" class="${round} relative"><i data-lucide="volume-2" class="size-5"></i><span id="fc-speak-lang" aria-hidden="true" class="absolute -top-1 -right-1 grid place-items-center min-w-5 h-5 px-1 rounded-full bg-teal-700 dark:bg-teal-400 text-white dark:text-teal-950 text-[10px] font-bold leading-none">EN</span></button>` : ''}
       <button type="button" id="fc-star" aria-label="收藏" aria-pressed="false" class="${round}"><i data-lucide="star" class="size-5"></i></button>
       <button type="button" id="fc-next" aria-label="下一張" class="${round}"><i data-lucide="chevron-right" class="size-5"></i></button>
     </div>
@@ -95,6 +96,7 @@ function drawBody() {
   $('#fc-prev').addEventListener('click', () => go(-1));
   $('#fc-next').addEventListener('click', () => go(1));
   $('#fc-star').addEventListener('click', () => { store.toggleStar(deck[index]); updateStar(); });
+  $('#fc-speak')?.addEventListener('click', speakFace);
   bindGestures();
 }
 
@@ -103,21 +105,21 @@ function faces(w) {
   const credit = w.image.credit
     ? `<span class="absolute bottom-1 right-2 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white">Photo by ${esc(w.image.credit.name)} / Unsplash</span>` : '';
   const img = w.image.url
-    ? `<div class="relative h-36 shrink-0"><img data-wq-img draggable="false" src="${esc(w.image.url)}" alt="" referrerpolicy="no-referrer" class="size-full object-cover">${credit}</div>` : '';
+    ? `<div class="relative h-36 md:h-60 shrink-0"><img data-wq-img draggable="false" src="${esc(w.image.url)}" alt="" referrerpolicy="no-referrer" class="size-full object-cover">${credit}</div>` : '';
   const pos = POS_LABELS[w.partOfSpeech];
 
   return `
     <div class="flip-face flex flex-col overflow-hidden rounded-3xl ${cls.card}">
       ${img}
       <div class="flex-1 grid place-content-center text-center px-4">
-        <p class="font-display text-4xl font-bold break-words">${esc(w.word)}</p>
+        <p class="font-display text-4xl md:text-6xl font-bold break-words">${esc(w.word)}</p>
         ${w.phonetic ? `<p class="mt-1 text-slate-500 dark:text-slate-400">${esc(w.phonetic)}</p>` : ''}
       </div>
     </div>
     <div class="flip-face flip-back flex flex-col justify-center gap-3 overflow-y-auto rounded-3xl bg-teal-700 dark:bg-teal-400 text-white dark:text-teal-950 p-6 text-center shadow-sm">
-      <p class="text-3xl font-bold break-words">${esc(w.translation)}</p>
+      <p class="text-3xl md:text-5xl font-bold break-words">${esc(w.translation)}</p>
       ${pos ? `<p class="text-sm opacity-80">${pos}</p>` : ''}
-      ${w.example ? `<p class="text-sm italic opacity-90 break-words">${esc(w.example)}</p>` : ''}
+      ${w.example ? `<p class="text-sm md:text-lg italic opacity-90 break-words">${esc(w.example)}</p>` : ''}
     </div>`;
 }
 
@@ -141,12 +143,44 @@ function showCard() {
     img.addEventListener('error', () => img.remove(), { once: true }));
 
   $('#fc-progress').textContent = `${index + 1} / ${deck.length}`;
-  const speak = $('#fc-speak');
-  if (speak) speak.dataset.speak = w.id;    // 🔊 由 tts.js 的全局監聽處理
+  syncSpeak();
   updateStar();
 }
 
-const flip = () => $('#fc-card').classList.toggle('is-flipped');
+/* ---------- 發音：只唸目前看得到的那一面 ---------- */
+// 正面是英文單字 → 只唸英文；翻到背面（中文）→ 只唸中文
+function faceSpeech() {
+  const w = current();
+  const back = $('#fc-card').classList.contains('is-flipped');
+  return back
+    ? { text: w.translation, lang: 'zh-TW', label: '播放中文', badge: '中' }
+    : { text: w.word, lang: 'en-US', label: '播放英文', badge: 'EN' };
+}
+
+function syncSpeak() {
+  const btn = $('#fc-speak');
+  if (!btn) return;
+  const f = faceSpeech();
+  btn.setAttribute('aria-label', f.label);
+  btn.title = f.label;
+  $('#fc-speak-lang').textContent = f.badge;
+}
+
+function speakFace() {
+  const f = faceSpeech();
+  if (!f.text) return;
+  const btn = $('#fc-speak');
+  const id = ++playId;
+  btn.classList.add('is-speaking');
+  speak(f.text, { lang: f.lang }).then(() => {
+    if (id === playId) btn.classList.remove('is-speaking');
+  });
+}
+
+function flip() {
+  $('#fc-card').classList.toggle('is-flipped');
+  syncSpeak();
+}
 
 /* ---------- 切換與動畫 ---------- */
 function setPos(el, x, opacity, rotate = 0) {
